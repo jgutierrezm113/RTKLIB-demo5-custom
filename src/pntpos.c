@@ -46,6 +46,52 @@
 #define MIN_EL      (5.0*D2R)   /* min elevation for measurement error (rad) */
 # define MAX_GDOP   30          /* max gdop for valid solution  */
 
+static double satvar[MAXSAT]={0}; /* user per-satellite variance (m^2), 0=not set */
+
+/* load per-satellite user variance override file ----------------------------*/
+extern int loadsatweights(const char *file)
+{
+    FILE *fp;
+    char line[256],id[16],unit[16];
+    double val;
+    int n=0,sat,ret;
+
+    for (sat=0;sat<MAXSAT;sat++) satvar[sat]=0.0;
+    if (!(fp=fopen(file,"r"))) return 0;
+
+    while (fgets(line,sizeof(line),fp)) {
+        char *p;
+        if ((p=strchr(line,'#'))) *p='\0';
+        line[strcspn(line,"\r\n")]='\0';
+
+        unit[0]='\0';
+        ret=sscanf(line,"%15s %lf %15s",id,&val,unit);
+        if (ret<=0) continue; /* blank line */
+        if (ret<2) {
+            fprintf(stderr,"loadsatweights: skipping bad line: %s\n",line);
+            continue;
+        }
+        sat=satid2no(id);
+        if (sat<=0||val<=0.0) {
+            fprintf(stderr,"loadsatweights: skipping bad line: %s\n",line);
+            continue;
+        }
+        if (ret==2||!strcmp(unit,"sigma")) {
+            satvar[sat-1]=val*val;
+        }
+        else if (!strcmp(unit,"weight")) {
+            satvar[sat-1]=1.0/val;
+        }
+        else {
+            fprintf(stderr,"loadsatweights: skipping bad line: %s\n",line);
+            continue;
+        }
+        n++;
+    }
+    fclose(fp);
+    trace(3,"loadsatweights: file=%s loaded=%d\n",file,n);
+    return 1;
+}
 /* pseudorange measurement error variance ------------------------------------*/
 static double varerr(const prcopt_t *opt, const ssat_t *ssat, const obsd_t *obs, double el, int sys)
 {
@@ -347,7 +393,13 @@ static int rescode(int iter, const obsd_t *obs, int n, const double *rs,
         vsat[i]=1; resp[i]=v[nv]; (*ns)++;
         
         /* variance of pseudorange error */
-        var[nv++]=varerr(opt,&ssat[i],&obs[i],azel[1+i*2],sys)+vare[i]+vmeas+vion+vtrp;
+        if (satvar[sat-1]>0.0) {
+            var[nv]=satvar[sat-1];
+        }
+        else {
+            var[nv]=varerr(opt,&ssat[i],&obs[i],azel[1+i*2],sys)+vare[i]+vmeas+vion+vtrp;
+        }
+        nv++;
         trace(4,"sat=%2d azel=%5.1f %4.1f res=%7.3f sig=%5.3f\n",obs[i].sat,
               azel[i*2]*R2D,azel[1+i*2]*R2D,resp[i],sqrt(var[nv-1]));
     }
@@ -673,7 +725,7 @@ extern int pntpos(const obsd_t *obs, int n, const nav_t *nav,
     stat=estpos(obs,n,rs,dts,var,svh,nav,&opt_,ssat,sol,azel_,vsat,resp,msg);
     
     /* RAIM FDE */
-    if (!stat&&n>=6&&opt->posopt[4]) {
+    if (n>=6&&opt->posopt[4]) {
         stat=raim_fde(obs,n,rs,dts,var,svh,nav,&opt_,ssat,sol,azel_,vsat,resp,msg);
     }
     /* estimate receiver velocity with Doppler */

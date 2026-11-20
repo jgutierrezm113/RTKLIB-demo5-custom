@@ -1337,7 +1337,7 @@ extern int outnmea_gga(uint8_t *buff, const sol_t *sol)
     h=geoidh(pos);
     deg2dms(fabs(pos[0])*R2D,dms1,7);
     deg2dms(fabs(pos[1])*R2D,dms2,7);
-    p+=sprintf(p,"$%sGGA,%02.0f%02.0f%05.2f,%02.0f%010.7f,%s,%03.0f%010.7f,%s,"
+    p+=sprintf(p,"$%sGGA,%02.0f%02.0f%05.2f,%02.3f%010.7f,%s,%03.0f%010.7f,%s,"
                "%d,%02d,%.1f,%.3f,M,%.3f,M,%.1f,%04d",
                NMEA_TID,ep[3],ep[4],ep[5],dms1[0],dms1[1]+dms1[2]/60.0,
                pos[0]>=0?"N":"S",dms2[0],dms2[1]+dms2[2]/60.0,pos[1]>=0?"E":"W",

@@ -71,7 +71,10 @@ static const char *help[]={
 " -l lat lon hgt reference (base) receiver latitude/longitude/height (deg/m)",
 "           rover latitude/longitude/height for fixed or ppp-fixed mode",
 " -y level  output soltion status (0:off,1:states,2:residuals) [0]",
-" -x level  debug trace level (0:off) [0]"
+" -x level  debug trace level (0:off) [0]",
+"\n\n*** NEW OPTIONS! ***",
+" -w file   per-satellite weight file for SPP least squares (lines: 'satid value [sigma|weight]') [off]",
+" -st       process each epoch using first epoch's time [off]\n"
 };
 /* show message --------------------------------------------------------------*/
 extern int showmsg(const char *format, ...)
@@ -107,6 +110,7 @@ int main(int argc, char **argv)
     prcopt.refpos=1;
     prcopt.glomodear=1;
     solopt.timef=0;
+    int st_flag = 0;
     sprintf(solopt.prog ,"%s ver.%s %s",PROGNAME,VER_RTKLIB,PATCH_LEVEL);
     sprintf(filopt.trace,"%s.trace",PROGNAME);
     
@@ -175,6 +179,15 @@ int main(int argc, char **argv)
         }
         else if (!strcmp(argv[i],"-y")&&i+1<argc) solopt.sstat=atoi(argv[++i]);
         else if (!strcmp(argv[i],"-x")&&i+1<argc) solopt.trace=atoi(argv[++i]);
+        else if (!strcmp(argv[i],"-st")) {
+            st_flag = 1;
+        }
+        else if (!strcmp(argv[i],"-w")&&i+1<argc) {
+            if (!loadsatweights(argv[++i])) {
+                fprintf(stderr,"error : cannot open weight file %s\n",argv[i]);
+                return -1;
+            }
+        }
         else if (*argv[i]=='-') printhelp();
         else if (n<MAXFILE) infile[n++]=argv[i];
     }
@@ -185,7 +198,7 @@ int main(int argc, char **argv)
         showmsg("error : no input file");
         return -2;
     }
-    ret=postpos(ts,te,tint,0.0,&prcopt,&solopt,&filopt,infile,n,outfile,"","");
+    ret=postpos(ts,te,tint,0.0,&prcopt,&solopt,&filopt,infile,n,outfile,"","",st_flag);
     
     if (!ret) fprintf(stderr,"%40s\r","");
     return ret;

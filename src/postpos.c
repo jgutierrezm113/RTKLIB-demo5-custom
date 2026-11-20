@@ -82,6 +82,9 @@ static char rtcm_path[1024]=""; /* rtcm data path */
 static gtime_t invalidtm[MAXINVALIDTM]={{0}};/* invalid time marks */
 static rtcm_t rtcm;             /* rtcm control struct */
 static FILE *fp_rtcm=NULL;      /* rtcm data file pointer */
+int first = 1;
+gtime_t start_time;
+int global_st_flag = -1;
 
 /* show message and check break ----------------------------------------------*/
 static int checkbrk(const char *format, ...)
@@ -418,11 +421,24 @@ static void procpos(FILE *fp, FILE *fptm, const prcopt_t *popt, const solopt_t *
     rtcm_path[0]='\0';
     
     while ((nobs=inputobs(obs_ptr,rtk->sol.stat,popt))>=0) {
-        
+
+        /* get first epoch time */
+        if (global_st_flag == 1){
+            if (first == 1){
+                first = 0;
+                start_time = obs_ptr[0].time;
+            }
+        }
         /* exclude satellites */
         for (i=n=0;i<nobs;i++) {
             if ((satsys(obs_ptr[i].sat,NULL)&popt->navsys)&&
                 popt->exsats[obs_ptr[i].sat-1]!=1) obs_ptr[n++]= obs_ptr[i];
+
+            /* apply first time to all measurements*/
+            if (global_st_flag == 1){
+                obs_ptr[i].time = start_time;
+            }
+
         }
         if (n<=0) continue;
         
@@ -430,6 +446,7 @@ static void procpos(FILE *fp, FILE *fptm, const prcopt_t *popt, const solopt_t *
         if (!strstr(popt->pppopt,"-ENA_FCB")) {
             corr_phase_bias_ssr(obs_ptr,n,&navs);
         }
+        
         if (!rtkpos(rtk, obs_ptr,n,&navs)) {
             if (rtk->sol.eventime.time != 0) {
                 if (mode == 0) {
@@ -440,7 +457,6 @@ static void procpos(FILE *fp, FILE *fptm, const prcopt_t *popt, const solopt_t *
             }
             continue;
         }
-        
         if (mode==0) { /* forward/backward */
             if (!solstatic) {
                 outsol(fp,&rtk->sol,rtk->rb,sopt);
@@ -1341,8 +1357,9 @@ static int execses_b(gtime_t ts, gtime_t te, double ti, const prcopt_t *popt,
 extern int postpos(gtime_t ts, gtime_t te, double ti, double tu,
                    const prcopt_t *popt, const solopt_t *sopt,
                    const filopt_t *fopt, char **infile, int n, char *outfile,
-                   const char *rov, const char *base)
+                   const char *rov, const char *base, int st_flag)
 {
+    global_st_flag = st_flag;
     gtime_t tts,tte,ttte;
     double tunit,tss;
     int i,j,k,nf,stat=0,week,flag=1,index[MAXINFILE]={0};
